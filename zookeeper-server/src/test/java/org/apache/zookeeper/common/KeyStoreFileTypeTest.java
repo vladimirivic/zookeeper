@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,36 +18,31 @@
 
 package org.apache.zookeeper.common;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import org.apache.zookeeper.ZKTestCase;
+import org.junit.Assert;
 import org.junit.Test;
 
 public class KeyStoreFileTypeTest extends ZKTestCase {
-
     @Test
     public void testGetPropertyValue() {
-        assertEquals("PEM", KeyStoreFileType.PEM.getPropertyValue());
-        assertEquals("JKS", KeyStoreFileType.JKS.getPropertyValue());
-        assertEquals("PKCS12", KeyStoreFileType.PKCS12.getPropertyValue());
+        Assert.assertEquals("PEM", KeyStoreFileType.PEM.getPropertyValue());
+        Assert.assertEquals("JKS", KeyStoreFileType.JKS.getPropertyValue());
     }
 
     @Test
     public void testFromPropertyValue() {
-        assertEquals(KeyStoreFileType.PEM, KeyStoreFileType.fromPropertyValue("PEM"));
-        assertEquals(KeyStoreFileType.JKS, KeyStoreFileType.fromPropertyValue("JKS"));
-        assertEquals(KeyStoreFileType.PKCS12, KeyStoreFileType.fromPropertyValue("PKCS12"));
-        assertNull(KeyStoreFileType.fromPropertyValue(""));
-        assertNull(KeyStoreFileType.fromPropertyValue(null));
+        Assert.assertEquals(KeyStoreFileType.PEM, KeyStoreFileType.fromPropertyValue("PEM"));
+        Assert.assertEquals(KeyStoreFileType.JKS, KeyStoreFileType.fromPropertyValue("JKS"));
+        Assert.assertNull(KeyStoreFileType.fromPropertyValue(""));
+        Assert.assertNull(KeyStoreFileType.fromPropertyValue(null));
     }
 
     @Test
     public void testFromPropertyValueIgnoresCase() {
-        assertEquals(KeyStoreFileType.PEM, KeyStoreFileType.fromPropertyValue("pem"));
-        assertEquals(KeyStoreFileType.JKS, KeyStoreFileType.fromPropertyValue("jks"));
-        assertEquals(KeyStoreFileType.PKCS12, KeyStoreFileType.fromPropertyValue("pkcs12"));
-        assertNull(KeyStoreFileType.fromPropertyValue(""));
-        assertNull(KeyStoreFileType.fromPropertyValue(null));
+        Assert.assertEquals(KeyStoreFileType.PEM, KeyStoreFileType.fromPropertyValue("pem"));
+        Assert.assertEquals(KeyStoreFileType.JKS, KeyStoreFileType.fromPropertyValue("jks"));
+        Assert.assertNull(KeyStoreFileType.fromPropertyValue(""));
+        Assert.assertNull(KeyStoreFileType.fromPropertyValue(null));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -57,12 +52,14 @@ public class KeyStoreFileTypeTest extends ZKTestCase {
 
     @Test
     public void testFromFilename() {
-        assertEquals(KeyStoreFileType.JKS, KeyStoreFileType.fromFilename("mykey.jks"));
-        assertEquals(KeyStoreFileType.JKS, KeyStoreFileType.fromFilename("/path/to/key/dir/mykey.jks"));
-        assertEquals(KeyStoreFileType.PEM, KeyStoreFileType.fromFilename("mykey.pem"));
-        assertEquals(KeyStoreFileType.PEM, KeyStoreFileType.fromFilename("/path/to/key/dir/mykey.pem"));
-        assertEquals(KeyStoreFileType.PKCS12, KeyStoreFileType.fromFilename("mykey.p12"));
-        assertEquals(KeyStoreFileType.PKCS12, KeyStoreFileType.fromFilename("/path/to/key/dir/mykey.p12"));
+        Assert.assertEquals(KeyStoreFileType.JKS,
+                KeyStoreFileType.fromFilename("mykey.jks"));
+        Assert.assertEquals(KeyStoreFileType.JKS,
+                KeyStoreFileType.fromFilename("/path/to/key/dir/mykey.jks"));
+        Assert.assertEquals(KeyStoreFileType.PEM,
+                KeyStoreFileType.fromFilename("mykey.pem"));
+        Assert.assertEquals(KeyStoreFileType.PEM,
+                KeyStoreFileType.fromFilename("/path/to/key/dir/mykey.pem"));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -73,11 +70,12 @@ public class KeyStoreFileTypeTest extends ZKTestCase {
     @Test
     public void testFromPropertyValueOrFileName() {
         // Property value takes precedence if provided
-        assertEquals(KeyStoreFileType.JKS, KeyStoreFileType.fromPropertyValueOrFileName("JKS", "prod.key"));
-        assertEquals(KeyStoreFileType.PEM, KeyStoreFileType.fromPropertyValueOrFileName("PEM", "prod.key"));
-        assertEquals(KeyStoreFileType.PKCS12, KeyStoreFileType.fromPropertyValueOrFileName("PKCS12", "prod.key"));
+        Assert.assertEquals(KeyStoreFileType.JKS,
+                KeyStoreFileType.fromPropertyValueOrFileName(
+                        "JKS", "prod.key"));
         // Falls back to filename detection if no property value
-        assertEquals(KeyStoreFileType.JKS, KeyStoreFileType.fromPropertyValueOrFileName("", "prod.jks"));
+        Assert.assertEquals(KeyStoreFileType.JKS,
+                KeyStoreFileType.fromPropertyValueOrFileName("", "prod.jks"));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -89,5 +87,4 @@ public class KeyStoreFileTypeTest extends ZKTestCase {
     public void testFromPropertyValueOrFileNameThrowsOnBadFileExtension() {
         KeyStoreFileType.fromPropertyValueOrFileName("", "prod.key");
     }
-
 }

@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,92 +18,29 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import java.io.IOException;
-import java.net.Socket;
-import java.net.SocketAddress;
 import org.apache.zookeeper.server.Request;
 import org.apache.zookeeper.server.ZKDatabase;
 import org.apache.zookeeper.server.quorum.auth.QuorumAuthServer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.net.Socket;
+import java.net.SocketAddress;
 
 /**
  * interface for keeping Observers in sync
  */
-public abstract class LearnerMaster {
-
-    private static final Logger LOG = LoggerFactory.getLogger(LearnerMaster.class);
-
-    // Throttle when there are too many concurrent snapshots being sent to observers
-    private static final String MAX_CONCURRENT_SNAPSYNCS = "zookeeper.leader.maxConcurrentSnapSyncs";
-    private static final int DEFAULT_CONCURRENT_SNAPSYNCS;
-
-    // Throttle when there are too many concurrent diff syncs being sent to observers
-    private static final String MAX_CONCURRENT_DIFF_SYNCS = "zookeeper.leader.maxConcurrentDiffSyncs";
-    private static final int DEFAULT_CONCURRENT_DIFF_SYNCS;
-
-    static {
-        DEFAULT_CONCURRENT_SNAPSYNCS = Integer.getInteger(MAX_CONCURRENT_SNAPSYNCS, 10);
-        LOG.info(MAX_CONCURRENT_SNAPSYNCS + " = " + DEFAULT_CONCURRENT_SNAPSYNCS);
-
-        DEFAULT_CONCURRENT_DIFF_SYNCS = Integer.getInteger(MAX_CONCURRENT_DIFF_SYNCS, 100);
-        LOG.info(MAX_CONCURRENT_DIFF_SYNCS + " = " + DEFAULT_CONCURRENT_DIFF_SYNCS);
-    }
-
-    private volatile int maxConcurrentSnapSyncs = DEFAULT_CONCURRENT_SNAPSYNCS;
-    private volatile int maxConcurrentDiffSyncs = DEFAULT_CONCURRENT_DIFF_SYNCS;
-
-    private final LearnerSyncThrottler learnerSnapSyncThrottler = new LearnerSyncThrottler(maxConcurrentSnapSyncs, LearnerSyncThrottler.SyncType.SNAP);
-
-    private final LearnerSyncThrottler learnerDiffSyncThrottler = new LearnerSyncThrottler(maxConcurrentDiffSyncs, LearnerSyncThrottler.SyncType.DIFF);
-
-    public int getMaxConcurrentSnapSyncs() {
-        return maxConcurrentSnapSyncs;
-    }
-
-    public void setMaxConcurrentSnapSyncs(int maxConcurrentSnapSyncs) {
-        LOG.info("Set maxConcurrentSnapSyncs to {}", maxConcurrentSnapSyncs);
-        this.maxConcurrentSnapSyncs = maxConcurrentSnapSyncs;
-        learnerSnapSyncThrottler.setMaxConcurrentSyncs(maxConcurrentSnapSyncs);
-    }
-
-    public int getMaxConcurrentDiffSyncs() {
-        return maxConcurrentDiffSyncs;
-    }
-
-    public void setMaxConcurrentDiffSyncs(int maxConcurrentDiffSyncs) {
-        LOG.info("Set maxConcurrentDiffSyncs to {}", maxConcurrentDiffSyncs);
-        this.maxConcurrentDiffSyncs = maxConcurrentDiffSyncs;
-        learnerDiffSyncThrottler.setMaxConcurrentSyncs(maxConcurrentDiffSyncs);
-    }
-
-    /**
-     * snap sync throttler
-     * @return snapshot throttler
-     */
-    public LearnerSyncThrottler getLearnerSnapSyncThrottler() {
-        return learnerSnapSyncThrottler;
-    }
-
-    /**
-     * diff sync throttler
-     * @return diff throttler
-     */
-    public LearnerSyncThrottler getLearnerDiffSyncThrottler() {
-        return learnerDiffSyncThrottler;
-    }
-
+public interface LearnerMaster {
     /**
      * start tracking a learner handler
      * @param learnerHandler to track
      */
-    abstract void addLearnerHandler(LearnerHandler learnerHandler);
+    void addLearnerHandler(LearnerHandler learnerHandler);
 
     /**
      * stop tracking a learner handler
      * @param learnerHandler to drop
      */
-    abstract void removeLearnerHandler(LearnerHandler learnerHandler);
+    void removeLearnerHandler(LearnerHandler learnerHandler);
 
     /**
      * wait for the leader of the new epoch to be confirmed by followers
@@ -112,13 +49,19 @@ public abstract class LearnerMaster {
      * @throws IOException
      * @throws InterruptedException
      */
-    abstract void waitForEpochAck(long sid, StateSummary ss) throws IOException, InterruptedException;
+    void waitForEpochAck(long sid, StateSummary ss) throws IOException, InterruptedException;
+
+    /**
+     * snapshot throttler
+     * @return snapshot throttler
+     */
+    LearnerSnapshotThrottler getLearnerSnapshotThrottler();
 
     /**
      * wait for server to start
      * @throws InterruptedException
      */
-    abstract void waitForStartup() throws InterruptedException;
+    void waitForStartup() throws InterruptedException;
 
     /**
      * get the first zxid of the next epoch
@@ -128,13 +71,13 @@ public abstract class LearnerMaster {
      * @throws InterruptedException
      * @throws IOException
      */
-    abstract long getEpochToPropose(long sid, long lastAcceptedEpoch) throws InterruptedException, IOException;
+    long getEpochToPropose(long sid, long lastAcceptedEpoch) throws InterruptedException, IOException;
 
     /**
      * ZKDatabase
      * @return ZKDatabase
      */
-    abstract ZKDatabase getZKDatabase();
+    ZKDatabase getZKDatabase();
 
     /**
      * wait for new leader to settle
@@ -142,43 +85,43 @@ public abstract class LearnerMaster {
      * @param zxid zxid at learner
      * @throws InterruptedException
      */
-    abstract void waitForNewLeaderAck(long sid, long zxid) throws InterruptedException;
+    void waitForNewLeaderAck(long sid, long zxid) throws InterruptedException;
 
     /**
      * last proposed zxid
      * @return last proposed zxid
      */
-    abstract long getLastProposed();
+    long getLastProposed();
 
     /**
      * the current tick
      * @return the current tick
      */
-    abstract int getCurrentTick();
+    int getCurrentTick();
 
     /**
      * time allowed for sync response
      * @return time allowed for sync response
      */
-    abstract int syncTimeout();
+    int syncTimeout();
 
     /**
      * deadline tick marking observer sync (initial)
      * @return deadline tick marking observer sync (initial)
      */
-    abstract int getTickOfNextAckDeadline();
+    int getTickOfNextAckDeadline();
 
     /**
      * next deadline tick marking observer sync (steady state)
      * @return next deadline tick marking observer sync (steady state)
      */
-    abstract int getTickOfInitialAckDeadline();
+    int getTickOfInitialAckDeadline();
 
     /**
      * decrement follower count
      * @return previous follower count
      */
-    abstract long getAndDecrementFollowerCounter();
+    long getAndDecrementFollowerCounter();
 
     /**
      * handle ack packet
@@ -186,14 +129,14 @@ public abstract class LearnerMaster {
      * @param zxid packet zxid
      * @param localSocketAddress forwarder's address
      */
-    abstract void processAck(long sid, long zxid, SocketAddress localSocketAddress);
+    void processAck(long sid, long zxid, SocketAddress localSocketAddress);
 
     /**
      * mark session as alive
      * @param sess session id
      * @param to timeout
      */
-    abstract void touch(long sess, int to);
+    void touch(long sess, int to);
 
     /**
      * handle revalidate packet
@@ -201,13 +144,13 @@ public abstract class LearnerMaster {
      * @param learnerHandler learner
      * @throws IOException
      */
-    abstract void revalidateSession(QuorumPacket qp, LearnerHandler learnerHandler) throws IOException;
+    void revalidateSession(QuorumPacket qp, LearnerHandler learnerHandler) throws IOException;
 
     /**
      * proxy request from learner to server
      * @param si request
      */
-    abstract void submitLearnerRequest(Request si);
+    void submitLearnerRequest(Request si);
 
     /**
      * begin forwarding packets to learner handler
@@ -215,40 +158,39 @@ public abstract class LearnerMaster {
      * @param lastSeenZxid zxid of learner
      * @return last zxid forwarded
      */
-    abstract long startForwarding(LearnerHandler learnerHandler, long lastSeenZxid);
+    long startForwarding(LearnerHandler learnerHandler, long lastSeenZxid);
 
     /**
      * version of current quorum verifier
      * @return version of current quorum verifier
      */
-    abstract long getQuorumVerifierVersion();
+    long getQuorumVerifierVersion();
 
     /**
      *
      * @param sid server id
      * @return server information in the view
      */
-    abstract String getPeerInfo(long sid);
+    String getPeerInfo(long sid);
 
     /**
      * identifier of current quorum verifier for new leader
      * @return identifier of current quorum verifier for new leader
      */
-    abstract byte[] getQuorumVerifierBytes();
+    byte[] getQuorumVerifierBytes();
 
-    abstract QuorumAuthServer getQuorumAuthServer();
+    QuorumAuthServer getQuorumAuthServer();
 
     /**
      * registers the handler's bean
      * @param learnerHandler handler
      * @param socket connection to learner
      */
-    abstract void registerLearnerHandlerBean(LearnerHandler learnerHandler, Socket socket);
+    void registerLearnerHandlerBean(final LearnerHandler learnerHandler, Socket socket);
 
     /**
      * unregisters the handler's bean
      * @param learnerHandler handler
      */
-    abstract void unregisterLearnerHandlerBean(LearnerHandler learnerHandler);
-
+    void unregisterLearnerHandlerBean(final LearnerHandler learnerHandler);
 }

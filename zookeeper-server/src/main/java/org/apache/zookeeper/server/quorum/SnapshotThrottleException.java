@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -16,32 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.zookeeper.server.command;
-
-import java.io.PrintWriter;
-import java.util.List;
-import org.apache.zookeeper.server.DataTree.ZxidDigest;
-import org.apache.zookeeper.server.ServerCnxn;
+package org.apache.zookeeper.server.quorum;
 
 /**
- * Command used to dump the latest digest histories.
+ * Thrown when a {@link Leader} has too many concurrent snapshots being sent
+ * to observers.
+ * 
+ * @see LearnerSnapshotThrottler
+ *
  */
-public class DigestCommand extends AbstractFourLetterCommand {
+public class SnapshotThrottleException extends Exception {
+    private static final long serialVersionUID = 1L;
 
-    public DigestCommand(PrintWriter pw, ServerCnxn serverCnxn) {
-        super(pw, serverCnxn);
+    public SnapshotThrottleException(int concurrentSnapshotNumber, int throttleThreshold) {
+        super(getMessage(concurrentSnapshotNumber, throttleThreshold));
     }
 
-    @Override
-    public void commandRun() {
-        if (!isZKServerRunning()) {
-            pw.print(ZK_NOT_SERVING);
-        } else {
-            List<ZxidDigest> digestLog = zkServer.getZKDatabase().getDataTree().getDigestLog();
-            for (ZxidDigest zd : digestLog) {
-                pw.println(Long.toHexString(zd.getZxid()) + ": " + zd.getDigest());
-            }
-        }
+    private static String getMessage(int concurrentSnapshotNumber, int throttleThreshold) {
+        return String.format("new snapshot would make %d concurrently in progress; " +
+                "maximum is %d", concurrentSnapshotNumber, throttleThreshold);
     }
-
 }

@@ -133,7 +133,8 @@ that restricts who can do what.
 
 ZooKeeper also has the notion of ephemeral nodes. These znodes
 exists as long as the session that created the znode is active. When the
-session ends the znode is deleted.
+session ends the znode is deleted. Ephemeral nodes are useful when you
+want to implement _[tbd]_.
 
 <a name="Conditional+updates+and+watches"></a>
 
@@ -144,7 +145,8 @@ Clients can set a watch on a znode. A watch will be triggered and
 removed when the znode changes. When a watch is triggered, the client
 receives a packet saying that the znode has changed. If the
 connection between the client and one of the ZooKeeper servers is
-broken, the client will receive a local notification.
+broken, the client will receive a local notification. These can be used
+to _[tbd]_.
 
 <a name="Guarantees"></a>
 
@@ -159,13 +161,14 @@ synchronization, it provides a set of guarantees. These are:
 * Atomicity - Updates either succeed or fail. No partial
   results.
 * Single System Image - A client will see the same view of the
-  service regardless of the server that it connects to. i.e., a
-  client will never see an older view of the system even if the
-  client fails over to a different server with the same session.
+  service regardless of the server that it connects to.
 * Reliability - Once an update has been applied, it will persist
   from that time forward until a client overwrites the update.
 * Timeliness - The clients view of the system is guaranteed to
   be up-to-date within a certain time bound.
+
+For more information on these, and how they can be used, see
+_[tbd]_
 
 <a name="Simple+API"></a>
 
@@ -195,6 +198,10 @@ operations:
 
 * *sync* :
     waits for data to be propagated
+
+For a more in-depth discussion on these, and how they can be used
+to implement higher level operations, please refer to
+_[tbd]_
 
 <a name="Implementation"></a>
 
@@ -242,7 +249,10 @@ state.
 
 The programming interface to ZooKeeper is deliberately simple.
 With it, however, you can implement higher order operations, such as
-synchronizations primitives, group membership, ownership, etc.
+synchronizations primitives, group membership, ownership, etc. Some
+distributed applications have used it to: _[tbd: add uses from
+white paper and video presentation.]_ For more information, see
+_[tbd]_
 
 <a name="Performance"></a>
 

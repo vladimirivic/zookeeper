@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,41 +18,41 @@
 
 package org.apache.zookeeper;
 
-import static org.junit.Assert.assertEquals;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import org.apache.jute.BinaryInputArchive;
 import org.apache.jute.BinaryOutputArchive;
 import org.apache.zookeeper.server.ByteBufferInputStream;
+import org.junit.Assert;
 import org.junit.Test;
 
-public class MultiOperationRecordTest extends ZKTestCase {
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 
+public class MultiTransactionRecordTest extends ZKTestCase {
     @Test
     public void testRoundTrip() throws IOException {
-        MultiOperationRecord request = new MultiOperationRecord();
+        MultiTransactionRecord request = new MultiTransactionRecord();
         request.add(Op.check("check", 1));
         request.add(Op.create("create", "create data".getBytes(), ZooDefs.Ids.CREATOR_ALL_ACL, ZooDefs.Perms.ALL));
         request.add(Op.delete("delete", 17));
         request.add(Op.setData("setData", "set data".getBytes(), 19));
 
-        MultiOperationRecord decodedRequest = codeDecode(request);
+        MultiTransactionRecord decodedRequest = codeDecode(request);
 
-        assertEquals(request, decodedRequest);
-        assertEquals(request.hashCode(), decodedRequest.hashCode());
+        Assert.assertEquals(request, decodedRequest);
+        Assert.assertEquals(request.hashCode(), decodedRequest.hashCode());
     }
 
     @Test
     public void testEmptyRoundTrip() throws IOException {
-        MultiOperationRecord request = new MultiOperationRecord();
-        MultiOperationRecord decodedRequest = codeDecode(request);
+        MultiTransactionRecord request = new MultiTransactionRecord();
+        MultiTransactionRecord decodedRequest = codeDecode(request);
 
-        assertEquals(request, decodedRequest);
-        assertEquals(request.hashCode(), decodedRequest.hashCode());
+        Assert.assertEquals(request, decodedRequest);
+        Assert.assertEquals(request.hashCode(), decodedRequest.hashCode());
     }
 
-    private MultiOperationRecord codeDecode(MultiOperationRecord request) throws IOException {
+    private MultiTransactionRecord codeDecode(MultiTransactionRecord request) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         BinaryOutputArchive boa = BinaryOutputArchive.getArchive(baos);
         request.serialize(boa, "request");
@@ -61,9 +61,8 @@ public class MultiOperationRecordTest extends ZKTestCase {
         bb.rewind();
 
         BinaryInputArchive bia = BinaryInputArchive.getArchive(new ByteBufferInputStream(bb));
-        MultiOperationRecord decodedRequest = new MultiOperationRecord();
+        MultiTransactionRecord decodedRequest = new MultiTransactionRecord();
         decodedRequest.deserialize(bia, "request");
         return decodedRequest;
     }
-
 }
