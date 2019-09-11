@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,27 +18,26 @@
 
 package org.apache.zookeeper.server.quorum;
 
-public class LearnerSnapshot {
-    private final LearnerSnapshotThrottler throttler;
-    private final int concurrentSnapshotNumber;
-    private final boolean essential;
+/**
+ * Thrown when a {@link Leader} has too many concurrent syncs being sent
+ * to observers.
+ *
+ * @see LearnerSyncThrottler
+ *
+ */
+public class SyncThrottleException extends Exception {
 
-    LearnerSnapshot(LearnerSnapshotThrottler throttler, 
-            int concurrentSnapshotNumber, boolean essential) {
-        this.throttler = throttler;
-        this.concurrentSnapshotNumber = concurrentSnapshotNumber;
-        this.essential = essential;
+    private static final long serialVersionUID = 1L;
+
+    public SyncThrottleException(int concurrentSyncNumber, int throttleThreshold, LearnerSyncThrottler.SyncType syncType) {
+        super(getMessage(concurrentSyncNumber, throttleThreshold, syncType));
     }
 
-    public void close() {
-        throttler.endSnapshot();
+    private static String getMessage(int concurrentSyncNumber, int throttleThreshold, LearnerSyncThrottler.SyncType syncType) {
+        return String.format("new %s sync would make %d concurrently in progress; maximum is %d",
+                             syncType.toString().toLowerCase(),
+                             concurrentSyncNumber,
+                             throttleThreshold);
     }
 
-    public int getConcurrentSnapshotNumber() {
-        return concurrentSnapshotNumber;
-    }
-    
-    public boolean isEssential() {
-        return essential;
-    }
 }

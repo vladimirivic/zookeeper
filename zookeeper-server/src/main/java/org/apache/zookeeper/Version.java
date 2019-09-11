@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -23,17 +23,6 @@ import org.apache.zookeeper.server.ExitCode;
 
 public class Version implements org.apache.zookeeper.version.Info {
 
-    /*
-     * Since the SVN to Git port this field doesn't return the revision anymore
-     * TODO: remove this method and associated field declaration in VerGen
-     * @see {@link #getHashRevision()}
-     * @return the default value -1
-     */
-    @Deprecated
-    public static int getRevision() {
-        return REVISION;
-    }
-
     public static String getRevisionHash() {
         return REVISION_HASH;
     }
@@ -42,11 +31,9 @@ public class Version implements org.apache.zookeeper.version.Info {
         return BUILD_DATE;
     }
 
-    @SuppressFBWarnings(value = "RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE",
-            justification = "Missing QUALIFIER causes redundant null-check")
+    @SuppressFBWarnings(value = "RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE", justification = "Missing QUALIFIER causes redundant null-check")
     public static String getVersion() {
-        return MAJOR + "." + MINOR + "." + MICRO
-            + (QUALIFIER == null ? "" : "-" + QUALIFIER);
+        return MAJOR + "." + MINOR + "." + MICRO + (QUALIFIER == null ? "" : "-" + QUALIFIER);
     }
 
     public static String getVersionRevision() {
@@ -58,21 +45,20 @@ public class Version implements org.apache.zookeeper.version.Info {
     }
 
     public static void printUsage() {
-        System.out
-                .print("Usage:\tjava -cp ... org.apache.zookeeper.Version "
-                        + "[--full | --short | --revision],\n\tPrints --full version "
-                        + "info if no arg specified.");
+        System.out.print("Usage:\tjava -cp ... org.apache.zookeeper.Version "
+                         + "[--full | --short | --revision],\n\tPrints --full version "
+                         + "info if no arg specified.");
         System.exit(ExitCode.UNEXPECTED_ERROR.getValue());
     }
 
     /**
      * Prints the current version, revision and build date to the standard out.
-     * 
+     *
      * @param args
      *            <ul>
      *            <li> --short - prints a short version string "1.2.3"
-     *            <li> --revision - prints a short version string with the SVN
-     *            repository revision "1.2.3-94"
+     *            <li> --revision - prints a short version string with the Git
+     *            repository revision "1.2.3-${revision_hash}"
      *            <li> --full - prints the revision and the build date
      *            </ul>
      */
@@ -84,12 +70,14 @@ public class Version implements org.apache.zookeeper.version.Info {
             System.out.println(getFullVersion());
             System.exit(ExitCode.EXECUTION_FINISHED.getValue());
         }
-        if (args[0].equals("--short"))
+        if (args[0].equals("--short")) {
             System.out.println(getVersion());
-        else if (args[0].equals("--revision"))
+        } else if (args[0].equals("--revision")) {
             System.out.println(getVersionRevision());
-        else
+        } else {
             printUsage();
+        }
         System.exit(ExitCode.EXECUTION_FINISHED.getValue());
     }
+
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,6 +18,7 @@
 
 package org.apache.zookeeper.server.admin;
 
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -28,7 +29,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-
+import java.util.stream.Collectors;
 import org.apache.zookeeper.Environment;
 import org.apache.zookeeper.Environment.Entry;
 import org.apache.zookeeper.Version;
@@ -38,11 +39,14 @@ import org.apache.zookeeper.server.ServerMetrics;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.apache.zookeeper.server.ZooTrace;
 import org.apache.zookeeper.server.persistence.SnapshotInfo;
+import org.apache.zookeeper.server.quorum.Follower;
+import org.apache.zookeeper.server.quorum.FollowerZooKeeperServer;
 import org.apache.zookeeper.server.quorum.Leader;
 import org.apache.zookeeper.server.quorum.LeaderZooKeeperServer;
 import org.apache.zookeeper.server.quorum.QuorumPeer;
 import org.apache.zookeeper.server.quorum.QuorumZooKeeperServer;
 import org.apache.zookeeper.server.quorum.ReadOnlyZooKeeperServer;
+import org.apache.zookeeper.server.quorum.flexible.QuorumVerifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,6 +58,7 @@ import org.slf4j.LoggerFactory;
  * @see JettyAdminServer
  */
 public class Commands {
+
     static final Logger LOG = LoggerFactory.getLogger(Commands.class);
 
     /** Maps command names to Command instances */
@@ -68,7 +73,7 @@ public class Commands {
         for (String name : command.getNames()) {
             Command prev = commands.put(name, command);
             if (prev != null) {
-                LOG.warn("Re-registering command %s (primary name = %s)", name, command.getPrimaryName());
+                LOG.warn("Re-registering command {} (primary name = {})", name, command.getPrimaryName());
             }
         }
         primaryNames.add(command.getPrimaryName());
@@ -88,7 +93,10 @@ public class Commands {
      *    - "command" key containing the command's primary name
      *    - "error" key containing a String error message or null if no error
      */
-    public static CommandResponse runCommand(String cmdName, ZooKeeperServer zkServer, Map<String, String> kwargs) {
+    public static CommandResponse runCommand(
+        String cmdName,
+        ZooKeeperServer zkServer,
+        Map<String, String> kwargs) {
         Command command = getCommand(cmdName);
         if (command == null) {
             return new CommandResponse(cmdName, "Unknown command: " + cmdName);
@@ -118,30 +126,36 @@ public class Commands {
         registerCommand(new CnxnStatResetCommand());
         registerCommand(new ConfCommand());
         registerCommand(new ConsCommand());
+        registerCommand(new DigestCommand());
         registerCommand(new DirsCommand());
         registerCommand(new DumpCommand());
         registerCommand(new EnvCommand());
         registerCommand(new GetTraceMaskCommand());
+        registerCommand(new InitialConfigurationCommand());
         registerCommand(new IsroCommand());
         registerCommand(new LastSnapshotCommand());
         registerCommand(new LeaderCommand());
         registerCommand(new MonitorCommand());
+        registerCommand(new ObserverCnxnStatResetCommand());
         registerCommand(new RuokCommand());
         registerCommand(new SetTraceMaskCommand());
         registerCommand(new SrvrCommand());
         registerCommand(new StatCommand());
         registerCommand(new StatResetCommand());
+        registerCommand(new SyncedObserverConsCommand());
+        registerCommand(new SystemPropertiesCommand());
+        registerCommand(new VotingViewCommand());
         registerCommand(new WatchCommand());
         registerCommand(new WatchesByPathCommand());
         registerCommand(new WatchSummaryCommand());
-        registerCommand(new SystemPropertiesCommand());
-        registerCommand(new InitialConfigurationCommand());
+        registerCommand(new ZabStateCommand());
     }
 
     /**
      * Reset all connection statistics.
      */
     public static class CnxnStatResetCommand extends CommandBase {
+
         public CnxnStatResetCommand() {
             super(Arrays.asList("connection_stat_reset", "crst"));
         }
@@ -153,6 +167,7 @@ public class Commands {
             return response;
 
         }
+
     }
 
     /**
@@ -160,6 +175,7 @@ public class Commands {
      * @see ZooKeeperServer#getConf()
      */
     public static class ConfCommand extends CommandBase {
+
         public ConfCommand() {
             super(Arrays.asList("configuration", "conf", "config"));
         }
@@ -170,6 +186,7 @@ public class Commands {
             response.putAll(zkServer.getConf().toMap());
             return response;
         }
+
     }
 
     /**
@@ -178,6 +195,7 @@ public class Commands {
      * @see org.apache.zookeeper.server.ServerCnxn#getConnectionInfo(boolean)
      */
     public static class ConsCommand extends CommandBase {
+
         public ConsCommand() {
             super(Arrays.asList("connections", "cons"));
         }
@@ -199,12 +217,14 @@ public class Commands {
             }
             return response;
         }
+
     }
 
     /**
      * Information on ZK datadir and snapdir size in bytes
      */
     public static class DirsCommand extends CommandBase {
+
         public DirsCommand() {
             super(Arrays.asList("dirs"));
         }
@@ -216,6 +236,7 @@ public class Commands {
             response.put("logdir_size", zkServer.getLogDirSize());
             return response;
         }
+
     }
 
     /**
@@ -228,6 +249,7 @@ public class Commands {
      * @see ZooKeeperServer#getEphemerals()
      */
     public static class DumpCommand extends CommandBase {
+
         public DumpCommand() {
             super(Arrays.asList("dump"));
         }
@@ -239,12 +261,14 @@ public class Commands {
             response.put("session_id_to_ephemeral_paths", zkServer.getEphemerals());
             return response;
         }
+
     }
 
     /**
      * All defined environment variables.
      */
     public static class EnvCommand extends CommandBase {
+
         public EnvCommand() {
             super(Arrays.asList("environment", "env", "envi"), false);
         }
@@ -257,6 +281,25 @@ public class Commands {
             }
             return response;
         }
+
+    }
+
+    /**
+     * Digest histories for every specific number of txns.
+     */
+    public static class DigestCommand extends CommandBase {
+
+        public DigestCommand() {
+            super(Arrays.asList("hash"));
+        }
+
+        @Override
+        public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
+            CommandResponse response = initializeResponse();
+            response.put("digests", zkServer.getZKDatabase().getDataTree().getDigestLog());
+            return response;
+        }
+
     }
 
     /**
@@ -264,6 +307,7 @@ public class Commands {
      *   - "tracemask": Long
      */
     public static class GetTraceMaskCommand extends CommandBase {
+
         public GetTraceMaskCommand() {
             super(Arrays.asList("get_trace_mask", "gtmk"), false);
         }
@@ -274,6 +318,22 @@ public class Commands {
             response.put("tracemask", ZooTrace.getTextTraceLevel());
             return response;
         }
+
+    }
+
+    public static class InitialConfigurationCommand extends CommandBase {
+
+        public InitialConfigurationCommand() {
+            super(Arrays.asList("initial_configuration", "icfg"));
+        }
+
+        @Override
+        public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
+            CommandResponse response = initializeResponse();
+            response.put("initial_configuration", zkServer.getInitialConfig());
+            return response;
+        }
+
     }
 
     /**
@@ -281,6 +341,7 @@ public class Commands {
      *   - "is_read_only": Boolean
      */
     public static class IsroCommand extends CommandBase {
+
         public IsroCommand() {
             super(Arrays.asList("is_read_only", "isro"));
         }
@@ -291,6 +352,7 @@ public class Commands {
             response.put("read_only", zkServer instanceof ReadOnlyZooKeeperServer);
             return response;
         }
+
     }
 
     /**
@@ -303,6 +365,7 @@ public class Commands {
      *   - "timestamp": Long
      */
     public static class LastSnapshotCommand extends CommandBase {
+
         public LastSnapshotCommand() {
             super(Arrays.asList("last_snapshot", "lsnp"));
         }
@@ -315,12 +378,14 @@ public class Commands {
             response.put("timestamp", info == null ? -1L : info.timestamp);
             return response;
         }
+
     }
 
     /**
      * Returns the leader status of this instance and the leader host string.
      */
     public static class LeaderCommand extends CommandBase {
+
         public LeaderCommand() {
             super(Arrays.asList("leader", "lead"));
         }
@@ -339,6 +404,7 @@ public class Commands {
             }
             return response;
         }
+
     }
 
     /**
@@ -366,6 +432,7 @@ public class Commands {
      *   - "pending_syncs": Integer (leader only)
      */
     public static class MonitorCommand extends CommandBase {
+
         public MonitorCommand() {
             super(Arrays.asList("monitor", "mntr"), false);
         }
@@ -374,17 +441,42 @@ public class Commands {
         public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
             CommandResponse response = initializeResponse();
             zkServer.dumpMonitorValues(response::put);
-            ServerMetrics.getMetrics()
-                    .getMetricsProvider()
-                    .dump(response::put);
+            ServerMetrics.getMetrics().getMetricsProvider().dump(response::put);
             return response;
 
-        }}
+        }
+
+    }
+
+    /**
+     * Reset all observer connection statistics.
+     */
+    public static class ObserverCnxnStatResetCommand extends CommandBase {
+
+        public ObserverCnxnStatResetCommand() {
+            super(Arrays.asList("observer_connection_stat_reset", "orst"));
+        }
+
+        @Override
+        public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
+            CommandResponse response = initializeResponse();
+            if (zkServer instanceof LeaderZooKeeperServer) {
+                Leader leader = ((LeaderZooKeeperServer) zkServer).getLeader();
+                leader.resetObserverConnectionStats();
+            } else if (zkServer instanceof FollowerZooKeeperServer) {
+                Follower follower = ((FollowerZooKeeperServer) zkServer).getFollower();
+                follower.resetObserverConnectionStats();
+            }
+            return response;
+        }
+
+    }
 
     /**
      * No-op command, check if the server is running
      */
     public static class RuokCommand extends CommandBase {
+
         public RuokCommand() {
             super(Arrays.asList("ruok"));
         }
@@ -393,6 +485,7 @@ public class Commands {
         public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
             return initializeResponse();
         }
+
     }
 
     /**
@@ -402,6 +495,7 @@ public class Commands {
      *   - "tracemask": Long
      */
     public static class SetTraceMaskCommand extends CommandBase {
+
         public SetTraceMaskCommand() {
             super(Arrays.asList("set_trace_mask", "stmk"), false);
         }
@@ -417,8 +511,7 @@ public class Commands {
             try {
                 traceMask = Long.parseLong(kwargs.get("traceMask"));
             } catch (NumberFormatException e) {
-                response.put("error", "setTraceMask requires long traceMask argument, got "
-                                      + kwargs.get("traceMask"));
+                response.put("error", "setTraceMask requires long traceMask argument, got " + kwargs.get("traceMask"));
                 return response;
             }
 
@@ -426,6 +519,7 @@ public class Commands {
             response.put("tracemask", traceMask);
             return response;
         }
+
     }
 
     /**
@@ -438,6 +532,7 @@ public class Commands {
      *   - "node_count": Integer
      */
     public static class SrvrCommand extends CommandBase {
+
         public SrvrCommand() {
             super(Arrays.asList("server_stats", "srvr"));
         }
@@ -456,18 +551,20 @@ public class Commands {
             response.put("server_stats", zkServer.serverStats());
             response.put("client_response", zkServer.serverStats().getClientResponseStats());
             if (zkServer instanceof LeaderZooKeeperServer) {
-                Leader leader = ((LeaderZooKeeperServer)zkServer).getLeader();
+                Leader leader = ((LeaderZooKeeperServer) zkServer).getLeader();
                 response.put("proposal_stats", leader.getProposalStats());
             }
             response.put("node_count", zkServer.getZKDatabase().getNodeCount());
             return response;
         }
+
     }
 
     /**
      * Same as SrvrCommand but has extra "connections" entry.
      */
     public static class StatCommand extends SrvrCommand {
+
         public StatCommand() {
             super(Arrays.asList("stats", "stat"));
         }
@@ -478,12 +575,14 @@ public class Commands {
             response.put("connections", zkServer.getServerCnxnFactory().getAllConnectionInfo(true));
             return response;
         }
+
     }
 
     /**
      * Resets server statistics.
      */
     public static class StatResetCommand extends CommandBase {
+
         public StatResetCommand() {
             super(Arrays.asList("stat_reset", "srst"));
         }
@@ -494,68 +593,54 @@ public class Commands {
             zkServer.serverStats().reset();
             return response;
         }
+
     }
 
     /**
-     * Watch information aggregated by session. Returned Map contains:
-     *   - "session_id_to_watched_paths": Map&lt;Long, Set&lt;String&gt;&gt; session ID -&gt; watched paths
-     * @see DataTree#getWatches()
+     * Information on observer connections to server. Returned Map contains:
+     *   - "synced_observers": Integer (leader/follower only)
+     *   - "observers": list of observer learner handler info objects (leader/follower only)
+     * @see org.apache.zookeeper.server.quorum.LearnerHandler#getLearnerHandlerInfo()
      */
-    public static class WatchCommand extends CommandBase {
-        public WatchCommand() {
-            super(Arrays.asList("watches", "wchc"));
+    public static class SyncedObserverConsCommand extends CommandBase {
+
+        public SyncedObserverConsCommand() {
+            super(Arrays.asList("observers", "obsr"));
         }
 
         @Override
         public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
-            DataTree dt = zkServer.getZKDatabase().getDataTree();
+
             CommandResponse response = initializeResponse();
-            response.put("session_id_to_watched_paths", dt.getWatches().toMap());
+
+            if (zkServer instanceof LeaderZooKeeperServer) {
+                Leader leader = ((LeaderZooKeeperServer) zkServer).getLeader();
+
+                response.put("synced_observers", leader.getObservingLearners().size());
+                response.put("observers", leader.getObservingLearnersInfo());
+                return response;
+            } else if (zkServer instanceof FollowerZooKeeperServer) {
+                Follower follower = ((FollowerZooKeeperServer) zkServer).getFollower();
+                Integer syncedObservers = follower.getSyncedObserverSize();
+                if (syncedObservers != null) {
+                    response.put("synced_observers", syncedObservers);
+                    response.put("observers", follower.getSyncedObserversInfo());
+                    return response;
+                }
+            }
+
+            response.put("synced_observers", 0);
+            response.put("observers", Collections.emptySet());
             return response;
         }
-    }
 
-    /**
-     * Watch information aggregated by path. Returned Map contains:
-     *   - "path_to_session_ids": Map&lt;String, Set&lt;Long&gt;&gt; path -&gt; session IDs of sessions watching path
-     * @see DataTree#getWatchesByPath()
-     */
-    public static class WatchesByPathCommand extends CommandBase {
-        public WatchesByPathCommand() {
-            super(Arrays.asList("watches_by_path", "wchp"));
-        }
-
-        @Override
-        public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
-            DataTree dt = zkServer.getZKDatabase().getDataTree();
-            CommandResponse response = initializeResponse();
-            response.put("path_to_session_ids", dt.getWatchesByPath().toMap());
-            return response;
-        }
-    }
-
-    /**
-     * Summarized watch information.
-     * @see DataTree#getWatchesSummary()
-     */
-    public static class WatchSummaryCommand extends CommandBase {
-        public WatchSummaryCommand() {
-            super(Arrays.asList("watch_summary", "wchs"));
-        }
-
-        @Override
-        public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
-            DataTree dt = zkServer.getZKDatabase().getDataTree();
-            CommandResponse response = initializeResponse();
-            response.putAll(dt.getWatchesSummary().toMap());
-            return response;
-        }
     }
 
     /**
      * All defined system properties.
      */
     public static class SystemPropertiesCommand extends CommandBase {
+
         public SystemPropertiesCommand() {
             super(Arrays.asList("system_properties", "sysp"), false);
         }
@@ -569,20 +654,163 @@ public class Commands {
             response.putAll(sortedSystemProperties);
             return response;
         }
+
     }
 
-    public static class InitialConfigurationCommand extends CommandBase {
-        public InitialConfigurationCommand() {
-            super(Arrays.asList("initial_configuration", "icfg"));
+    /**
+     * Returns the current ensemble configuration information.
+     * It provides list of current voting members in the ensemble.
+     */
+    public static class VotingViewCommand extends CommandBase {
+
+        public VotingViewCommand() {
+            super(Arrays.asList("voting_view"));
         }
 
         @Override
         public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
             CommandResponse response = initializeResponse();
-            response.put("initial_configuration", zkServer.getInitialConfig());
+            if (zkServer instanceof QuorumZooKeeperServer) {
+                QuorumPeer peer = ((QuorumZooKeeperServer) zkServer).self;
+                VotingView votingView = new VotingView(peer.getVotingView());
+                response.put("current_config", votingView);
+            } else {
+                response.put("current_config", Collections.emptyMap());
+            }
             return response;
         }
+
+        private static class VotingView {
+
+            private final Map<Long, String> view;
+
+            VotingView(Map<Long, QuorumPeer.QuorumServer> view) {
+                this.view = view.entrySet()
+                                .stream()
+                                .filter(e -> e.getValue().addr != null)
+                                .collect(Collectors.toMap(
+                                    Map.Entry::getKey,
+                                    e -> String.format(
+                                        "%s:%d%s:%s%s",
+                                        QuorumPeer.QuorumServer.delimitedHostString(e.getValue().addr),
+                                        e.getValue().addr.getPort(),
+                                        e.getValue().electionAddr == null ? "" : ":" + e.getValue().electionAddr.getPort(),
+                                        e.getValue().type.equals(QuorumPeer.LearnerType.PARTICIPANT) ? "participant" : "observer",
+                                        e.getValue().clientAddr == null || e.getValue().isClientAddrFromStatic
+                                            ? ""
+                                            : String.format(
+                                                ";%s:%d",
+                                                QuorumPeer.QuorumServer.delimitedHostString(e.getValue().clientAddr),
+                                                e.getValue().clientAddr.getPort())),
+                                    (v1, v2) -> v1, // cannot get duplicates as this straight draws from the other map
+                                    TreeMap::new));
+            }
+
+            @JsonAnyGetter
+            public Map<Long, String> getView() {
+                return view;
+            }
+
+        }
+
     }
 
-    private Commands() {}
+    /**
+     * Watch information aggregated by session. Returned Map contains:
+     *   - "session_id_to_watched_paths": Map&lt;Long, Set&lt;String&gt;&gt; session ID -&gt; watched paths
+     * @see DataTree#getWatches()
+     */
+    public static class WatchCommand extends CommandBase {
+
+        public WatchCommand() {
+            super(Arrays.asList("watches", "wchc"));
+        }
+
+        @Override
+        public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
+            DataTree dt = zkServer.getZKDatabase().getDataTree();
+            CommandResponse response = initializeResponse();
+            response.put("session_id_to_watched_paths", dt.getWatches().toMap());
+            return response;
+        }
+
+    }
+
+    /**
+     * Watch information aggregated by path. Returned Map contains:
+     *   - "path_to_session_ids": Map&lt;String, Set&lt;Long&gt;&gt; path -&gt; session IDs of sessions watching path
+     * @see DataTree#getWatchesByPath()
+     */
+    public static class WatchesByPathCommand extends CommandBase {
+
+        public WatchesByPathCommand() {
+            super(Arrays.asList("watches_by_path", "wchp"));
+        }
+
+        @Override
+        public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
+            DataTree dt = zkServer.getZKDatabase().getDataTree();
+            CommandResponse response = initializeResponse();
+            response.put("path_to_session_ids", dt.getWatchesByPath().toMap());
+            return response;
+        }
+
+    }
+
+    /**
+     * Summarized watch information.
+     * @see DataTree#getWatchesSummary()
+     */
+    public static class WatchSummaryCommand extends CommandBase {
+
+        public WatchSummaryCommand() {
+            super(Arrays.asList("watch_summary", "wchs"));
+        }
+
+        @Override
+        public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
+            DataTree dt = zkServer.getZKDatabase().getDataTree();
+            CommandResponse response = initializeResponse();
+            response.putAll(dt.getWatchesSummary().toMap());
+            return response;
+        }
+
+    }
+
+    /**
+     * Returns the current phase of Zab protocol that peer is running.
+     * It can be in one of these phases: ELECTION, DISCOVERY, SYNCHRONIZATION, BROADCAST
+     */
+    public static class ZabStateCommand extends CommandBase {
+
+        public ZabStateCommand() {
+            super(Arrays.asList("zabstate"), false);
+        }
+
+        @Override
+        public CommandResponse run(ZooKeeperServer zkServer, Map<String, String> kwargs) {
+            CommandResponse response = initializeResponse();
+            if (zkServer instanceof QuorumZooKeeperServer) {
+                QuorumPeer peer = ((QuorumZooKeeperServer) zkServer).self;
+                QuorumPeer.ZabState zabState = peer.getZabState();
+                QuorumVerifier qv = peer.getQuorumVerifier();
+
+                QuorumPeer.QuorumServer voter = qv.getVotingMembers().get(peer.getId());
+                boolean voting = (voter != null
+                                  && voter.addr.equals(peer.getQuorumAddress())
+                                  && voter.electionAddr.equals(peer.getElectionAddress()));
+                response.put("voting", voting);
+                response.put("zabstate", zabState.name().toLowerCase());
+            } else {
+                response.put("voting", false);
+                response.put("zabstate", "");
+            }
+            return response;
+        }
+
+    }
+
+    private Commands() {
+    }
+
 }

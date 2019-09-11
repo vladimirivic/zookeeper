@@ -17,46 +17,74 @@
 
 package org.apache.zookeeper;
 
-import org.apache.jute.InputArchive;
-import org.apache.jute.OutputArchive;
-import org.apache.jute.Record;
-import org.apache.zookeeper.proto.*;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import org.apache.jute.InputArchive;
+import org.apache.jute.OutputArchive;
+import org.apache.jute.Record;
+import org.apache.zookeeper.proto.CheckVersionRequest;
+import org.apache.zookeeper.proto.CreateRequest;
+import org.apache.zookeeper.proto.CreateTTLRequest;
+import org.apache.zookeeper.proto.DeleteRequest;
+import org.apache.zookeeper.proto.GetChildrenRequest;
+import org.apache.zookeeper.proto.GetDataRequest;
+import org.apache.zookeeper.proto.MultiHeader;
+import org.apache.zookeeper.proto.SetDataRequest;
 
 /**
- * Encodes a composite transaction.  In the wire format, each transaction
+ * Encodes a composite operation.  In the wire format, each operation
  * consists of a single MultiHeader followed by the appropriate request.
  * Each of these MultiHeaders has a type which indicates
- * the type of the following transaction or a negative number if no more transactions
+ * the type of the following operation or a negative number if no more operations
  * are included.
+ * All of the operations must be from the same OpKind.
  */
-public class MultiTransactionRecord implements Record, Iterable<Op> {
-    private List<Op> ops = new ArrayList<Op>();
+public class MultiOperationRecord implements Record, Iterable<Op> {
 
-    public MultiTransactionRecord() {
+    private List<Op> ops = new ArrayList<Op>();
+    private Op.OpKind opKind = null;
+
+    public MultiOperationRecord() {
     }
 
-    public MultiTransactionRecord(Iterable<Op> ops) {
+    public MultiOperationRecord(Iterable<Op> ops) throws IllegalArgumentException {
         for (Op op : ops) {
+            setOrCheckOpKind(op.getKind());
             add(op);
         }
     }
 
     @Override
     public Iterator<Op> iterator() {
-        return ops.iterator() ;
+        return ops.iterator();
     }
 
-    public void add(Op op) {
+    public void add(Op op) throws IllegalArgumentException {
+        setOrCheckOpKind(op.getKind());
         ops.add(op);
     }
 
     public int size() {
         return ops.size();
+    }
+
+    /**
+     * Returns the kind of the operations contained by the record.
+     * @return The OpKind value of all the elements in the record.
+     */
+    public Op.OpKind getOpKind() {
+        return opKind;
+    }
+
+    private void setOrCheckOpKind(Op.OpKind ok) throws IllegalArgumentException {
+        if (opKind == null) {
+            opKind = ok;
+        } else if (ok != opKind) {
+            throw new IllegalArgumentException("Mixing read and write operations (transactions)"
+                                               + " is not allowed in a multi request.");
+        }
     }
 
     @Override
@@ -66,17 +94,19 @@ public class MultiTransactionRecord implements Record, Iterable<Op> {
             MultiHeader h = new MultiHeader(op.getType(), false, -1);
             h.serialize(archive, tag);
             switch (op.getType()) {
-                case ZooDefs.OpCode.create:
-                case ZooDefs.OpCode.create2:
-                case ZooDefs.OpCode.createTTL:
-                case ZooDefs.OpCode.createContainer:
-                case ZooDefs.OpCode.delete:
-                case ZooDefs.OpCode.setData:
-                case ZooDefs.OpCode.check:
-                    op.toRequestRecord().serialize(archive, tag);
-                    break;
-                default:
-                    throw new IOException("Invalid type of op");
+            case ZooDefs.OpCode.create:
+            case ZooDefs.OpCode.create2:
+            case ZooDefs.OpCode.createTTL:
+            case ZooDefs.OpCode.createContainer:
+            case ZooDefs.OpCode.delete:
+            case ZooDefs.OpCode.setData:
+            case ZooDefs.OpCode.check:
+            case ZooDefs.OpCode.getChildren:
+            case ZooDefs.OpCode.getData:
+                op.toRequestRecord().serialize(archive, tag);
+                break;
+            default:
+                throw new IOException("Invalid type of op");
             }
         }
         new MultiHeader(-1, true, -1).serialize(archive, tag);
@@ -88,9 +118,9 @@ public class MultiTransactionRecord implements Record, Iterable<Op> {
         archive.startRecord(tag);
         MultiHeader h = new MultiHeader();
         h.deserialize(archive, tag);
-
-        while (!h.getDone()) {
-            switch (h.getType()) {
+        try {
+            while (!h.getDone()) {
+                switch (h.getType()) {
                 case ZooDefs.OpCode.create:
                 case ZooDefs.OpCode.create2:
                 case ZooDefs.OpCode.createContainer:
@@ -118,20 +148,37 @@ public class MultiTransactionRecord implements Record, Iterable<Op> {
                     cvr.deserialize(archive, tag);
                     add(Op.check(cvr.getPath(), cvr.getVersion()));
                     break;
+                case ZooDefs.OpCode.getChildren:
+                    GetChildrenRequest gcr = new GetChildrenRequest();
+                    gcr.deserialize(archive, tag);
+                    add(Op.getChildren(gcr.getPath()));
+                    break;
+                case ZooDefs.OpCode.getData:
+                    GetDataRequest gdr = new GetDataRequest();
+                    gdr.deserialize(archive, tag);
+                    add(Op.getData(gdr.getPath()));
+                    break;
                 default:
                     throw new IOException("Invalid type of op");
+                }
+                h.deserialize(archive, tag);
             }
-            h.deserialize(archive, tag);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Mixing different kind of ops");
         }
         archive.endRecord(tag);
     }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof MultiTransactionRecord)) return false;
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof MultiOperationRecord)) {
+            return false;
+        }
 
-        MultiTransactionRecord that = (MultiTransactionRecord) o;
+        MultiOperationRecord that = (MultiOperationRecord) o;
 
         if (ops != null) {
             Iterator<Op> other = that.ops.iterator();
@@ -160,4 +207,5 @@ public class MultiTransactionRecord implements Record, Iterable<Op> {
         }
         return h;
     }
+
 }
